@@ -4,7 +4,7 @@ const $ = (sel) => document.querySelector(sel)
 const app = $('#app')
 
 let catalog = null // /api/catalog 缓存
-let startDraft = { skill: '', entry: '文字题目', topic: '', goal: '', grade: '' }
+let startDraft = { skill: '', topic: '' }
 
 async function api(path, opts) {
   const res = await fetch(`/edulab${path}`, opts)
@@ -124,75 +124,39 @@ async function viewStart(params) {
   app.innerHTML = `
     <div class="page-head">
       <div class="page-title">发起制作</div>
-      <div class="page-sub">选学科技能 → 给题目/主题 → 开新对话生成课件</div>
+      <div class="page-sub">选学科 → 给主题 → 开新对话生成课件</div>
     </div>
     <div class="form">
       <div class="field">
-        <label>学科技能</label>
+        <label>学科</label>
         <select id="f-skill">
-          ${(c.skills || []).map((m) => `<option value="${esc(m.name)}" ${m.name === startDraft.skill ? 'selected' : ''}>${esc(m.title)}（${esc(m.name)}｜${esc(m.subject)}｜${esc(m.deps)}）</option>`).join('')}
+          ${(c.skills || []).map((m) => `<option value="${esc(m.name)}" ${m.name === startDraft.skill ? 'selected' : ''}>${esc(m.title)}</option>`).join('')}
         </select>
         <div class="form-note" id="skill-note" style="margin-top:var(--sp-2)"></div>
       </div>
       <div class="field">
-        <label>制作入口</label>
-        <div class="entry-row" id="f-entry">
-          ${(c.entries || ['文字题目', '随机出题', '图片识别', '主题创作']).map((e2) => `<button type="button" class="entry-chip ${e2 === startDraft.entry ? 'on' : ''}" data-entry="${esc(e2)}">${esc(e2)}</button>`).join('')}
-        </div>
-        <div class="form-note">文字题目=贴题面；随机出题=让 agent 自己出典型题；图片识别=你之后在对话里发题目图片；主题创作=科普概念/知识点。</div>
+        <label>主题 / 题目</label>
+        <textarea id="f-topic" placeholder="例：正四棱锥 P-ABCD 中，PA=2，其余棱长均为 √2，求二面角 A-PB-C 的余弦值&#10;或：日食为什么总是发生在农历初一？">${esc(startDraft.topic)}</textarea>
       </div>
-      <div class="field">
-        <label>题目 / 主题</label>
-        <textarea id="f-topic" placeholder="例：正四棱锥 P-ABCD 中，PA=2，其余棱长均为 √2，求二面角 A-PB-C 的余弦值。&#10;或主题：日食为什么总是发生在农历初一？">${esc(startDraft.topic)}</textarea>
-      </div>
-      <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4)">
-        <div>
-          <label>教学目标（可选）</label>
-          <input type="text" id="f-goal" placeholder="例：掌握建系向量法求二面角" value="${esc(startDraft.goal)}">
-        </div>
-        <div>
-          <label>学段（可选）</label>
-          <select id="f-grade">
-            <option value="">自动</option>
-            ${(c.grades || []).map((g) => `<option ${g === startDraft.grade ? 'selected' : ''}>${esc(g)}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:var(--sp-3)">
+      <div style="display:flex;gap:var(--sp-3);align-items:center">
         <button class="btn primary" id="btn-launch">✦ 开新对话制作课件</button>
-        <button class="btn ghost" id="btn-copy">只复制提示词</button>
+        <div class="form-note" style="margin:0">主题留空 = 让 agent 自己出典型题。依赖不足时它会先自检并告诉你怎么装。</div>
       </div>
-      <div class="form-note">点「开新对话」会把制作指令带进新对话（不自动发送，你确认后回车）；技能依赖不足时 agent 会先跑 edulab check 并提示装依赖。</div>
     </div>`
 
   const skillNote = () => {
     const sk = (c.env?.skills || []).find((x) => x.name === $('#f-skill').value)
     const meta = (c.skills || []).find((m) => m.name === $('#f-skill').value)
-    $('#skill-note').innerHTML = `${sk && !sk.available ? `<span class="tag warn">缺依赖：${esc(sk.deps)}</span> ` : ''}${esc(meta?.triggers || '')}`
+    $('#skill-note').innerHTML = `${sk && !sk.available ? `<span class="tag warn">缺依赖：${esc(sk.deps)}</span> ` : ''}${esc(meta?.summary || '')}`
   }
   skillNote()
   $('#f-skill').onchange = (e) => { startDraft.skill = e.target.value; skillNote() }
-  $('#f-entry').onclick = (e) => {
-    const b = e.target.closest('[data-entry]')
-    if (!b) return
-    startDraft.entry = b.dataset.entry
-    document.querySelectorAll('#f-entry .entry-chip').forEach((x) => x.classList.toggle('on', x === b))
-  }
-  const collect = () => {
-    startDraft.topic = $('#f-topic').value.trim()
-    startDraft.goal = $('#f-goal').value.trim()
-    startDraft.grade = $('#f-grade').value
-    return buildPrompt()
-  }
+  $('#f-topic').oninput = (e) => { startDraft.topic = e.target.value }
   $('#btn-launch').onclick = () => {
-    const prompt = collect()
-    if (!prompt) return toast('先写点题目或主题')
+    startDraft.topic = $('#f-topic').value
+    const prompt = buildPrompt()
+    if (!prompt) return toast('先选学科')
     parent.postMessage({ type: 'edulab:start', prompt }, location.origin)
-  }
-  $('#btn-copy').onclick = async () => {
-    const prompt = collect()
-    if (!prompt) return toast('先写点题目或主题')
-    try { await navigator.clipboard.writeText(prompt); toast('提示词已复制，粘到对话里即可') } catch { toast('复制失败，浏览器不支持剪贴板') }
   }
   addEventListener('message', onLaunchAck)
 }
@@ -201,23 +165,12 @@ function buildPrompt() {
   const c = catalog
   const meta = (c.skills || []).find((m) => m.name === startDraft.skill)
   if (!meta) return ''
-  const lines = [
-    `请使用「${meta.title}」技能（${meta.name}）制作一份交互课件。`,
-    '',
-    `制作入口：${startDraft.entry}`,
-  ]
-  if (startDraft.topic) lines.push('', `题目/主题：`, startDraft.topic)
-  else lines.push('', startDraft.entry === '随机出题' ? '请出一道该技能最典型的题目（难度：中档偏上，过程有教学价值）。' : startDraft.entry === '图片识别' ? '我稍后发题目图片，你识别后按技能流程生成。' : '主题由你从该技能的触发场景里选一个最有代表性的。')
-  if (startDraft.goal) lines.push('', `教学目标：${startDraft.goal}`)
-  if (startDraft.grade) lines.push(`学段：${startDraft.grade}`)
-  lines.push(
-    '',
-    '流程要求：',
-    '1. 先跑 edulab 工具 action=check 确认环境（缺 python/sympy 就如实告诉我怎么装，不要硬编数值）。',
-    '2. 按技能 SKILL.md 的流程生成单文件 HTML 到当前工作区。',
-    '3. 生成完跑 edulab validate（安检不过必须修完）→ edulab save 存证 → edulab serve start，',
-    '   然后告诉我去侧栏「课件实验室」看板回看。')
-  return lines.join('\n')
+  const topic = String(startDraft.topic || '').trim()
+  return [
+    `请用「${meta.title}」技能（${meta.name}）制作一份交互课件。`,
+    topic ? `\n主题/题目：\n${topic}` : '\n主题：请出一道该技能最典型的题目（中档偏上难度，过程有教学价值）。',
+    '\n按技能 SKILL.md 流程生成单文件 HTML 到当前工作区；完成后依次跑 edulab validate → save → serve start，然后告诉我去侧栏「课件实验室」面板回看。',
+  ].join('\n')
 }
 
 function onLaunchAck(e) {
