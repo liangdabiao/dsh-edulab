@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#e5a526" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 烧瓶 + 原子轨道：实验与学科的合成意象（固定琥珀色，img 引用时不随页面 currentColor 变化） -->
+  <path d="M9.5 3h5v5.2l4.2 8.4A2.6 2.6 0 0 1 16.4 20.5H7.6a2.6 2.6 0 0 1-2.3-3.9L9.5 8.2V3z"/>
+  <path d="M7.2 14.5h9.6"/>
+  <ellipse cx="12" cy="17" rx="4.2" ry="1.7" transform="rotate(-18 12 17)"/>
+  <circle cx="12" cy="17" r="0.9" fill="#e5a526" stroke="none"/>
+  <path d="M8.5 3h7"/>
+</svg>

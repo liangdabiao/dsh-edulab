@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>课件实验室</title>
+<script src="scheme.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <a class="brand" href="#/">
+      <img class="brand-logo" src="icon.svg" alt="">
+      <span><span class="brand-name">课件实验室</span><span class="brand-sub">dsh-edulab</span></span>
+    </a>
+    <nav class="nav" aria-label="导航">
+      <div class="nav-group">档案</div>
+      <a href="#/" data-view="home"><span class="nav-dot">◉</span>概览</a>
+      <a href="#/archives" data-view="archives"><span class="nav-dot">▤</span>课件档案<span class="nav-count" id="nav-archives-count"></span></a>
+      <a href="#/history" data-view="history"><span class="nav-dot">↺</span>动态历史</a>
+      <div class="nav-group">动作</div>
+      <a href="#/start" data-view="start"><span class="nav-dot">✦</span>发起制作</a>
+    </nav>
+    <div class="rail-foot" id="rail-foot"></div>
+  </aside>
+  <main class="main" id="app"><div class="loading">LOADING…</div></main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

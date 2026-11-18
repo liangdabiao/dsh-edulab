@@ -1,0 +1,63 @@
+{
+  "name": "dsh-edulab",
+  "version": "0.1.0",
+  "description": "课件实验室（零 API 密钥 · agent 原生）：把学科题目/知识点生成为可直接在浏览器打开的单文件交互课件 HTML——8 个学科技能：立体几何/解析几何（sympy 内核解题）、化学反应 3D 微观演示（自动配平+守恒）、化学步进课程、物理 2D/3D、平面几何、科普可视化。edulab 工具管环境自检（python/sympy 探测）/安检（拦占位符残留等机械事故）/存证/预览；侧栏「课件实验室」看板：概览/发起制作/课件档案（真实课件 iframe 预览）。",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "src/host.js",
+  "exports": {
+    ".": "./src/host.js",
+    "./client": "./dist/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "icon": "./icon.svg",
+  "files": [
+    "src",
+    "dist",
+    "lib",
+    "lab",
+    "skills",
+    "locale/*.json",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "education",
+    "courseware",
+    "math",
+    "physics",
+    "chemistry",
+    "threejs"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.19.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/lib.test.mjs",
+    "prepack": "npm run build"
+  }
+}
