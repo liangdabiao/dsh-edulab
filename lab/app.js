@@ -7,7 +7,13 @@ let catalog = null // /api/catalog 缓存
 let startDraft = { skill: '', topic: '' }
 
 async function api(path, opts) {
-  const res = await fetch(`/edulab${path}`, opts)
+  let res
+  try {
+    res = await fetch(`/edulab${path}`, opts)
+  } catch {
+    // 网络层失败（服务不在/连接拒绝）：fetch 抛 TypeError，给一句人话
+    throw new Error('面板服务没在跑——数据接口连不上，重启 dsh 或插件预览服务后重试')
+  }
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
   return body
@@ -158,6 +164,8 @@ async function viewStart(params) {
     if (!prompt) return toast('先选学科')
     parent.postMessage({ type: 'edulab:start', prompt }, location.origin)
   }
+  // 幂等注册：viewStart 每次进入都会执行，重复 add 会叠加监听器
+  removeEventListener('message', onLaunchAck)
   addEventListener('message', onLaunchAck)
 }
 
@@ -291,7 +299,10 @@ async function viewHistory() {
 }
 
 function viewError(msg) {
-  app.innerHTML = `<div class="empty" style="margin:var(--sp-8)">${esc(msg)}<br><br><a class="btn ghost" href="#/">← 回概览</a></div>`
+  app.innerHTML = `<div class="empty" style="margin:var(--sp-8)">⚠ ${esc(msg)}<br><br>
+    <button class="btn primary" id="btn-retry">重试</button>
+    <a class="btn ghost" href="#/">← 回概览</a></div>`
+  $('#btn-retry').onclick = () => { catalog = null; render(viewNow()) }
 }
 
 // ---------- 路由 ----------
