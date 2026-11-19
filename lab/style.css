@@ -6,11 +6,11 @@
   --font-sans:'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,sans-serif;
   --font-serif:'Noto Serif SC','Songti SC','SimSun',Georgia,serif;
   --font-mono:'JetBrains Mono','Noto Sans SC',ui-monospace,'SF Mono',Menlo,monospace;
-  --sp-1:2px; --sp-2:4px; --sp-3:8px; --sp-4:12px; --sp-5:16px; --sp-6:24px; --sp-7:32px; --sp-8:40px;
+  --sp-1:2px; --sp-2:4px; --sp-3:8px; --sp-4:12px; --sp-5:16px; --sp-6:24px; --sp-7:32px; --sp-8:40px; --sp-12:64px;
   --paper:#f3efe5; --paper-2:#eae5d8; --grey-1:#ece7db;
   --navy:#07182d; --navy-2:#0d2440;
   --ink:#14202e;
-  --text-primary:#14202e; --text-body:#31414f; --text-secondary:#6b7684; --text-helper:#96938a; --text-placeholder:#a9a69c;
+  --text-primary:#14202e; --text-body:#31414f; --text-secondary:#59636f; --text-helper:#6b6559; --text-placeholder:#8a857a;
   --line-strong:#14202e; --line:#d8d2c2; --line-subtle:#e3ddd0;
   --accent:#b41f24; --accent-on:#ffffff; --accent-soft:#f7ece9;
   --amber:#e5a526; --amber-soft:#f8efd9;
@@ -119,7 +119,9 @@ button { background: none; border: 0; cursor: pointer; }
 /* ---------- 预览 ---------- */
 .viewer-bar { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-5); background: var(--navy); color: #dfe6ee; }
 .viewer-bar .title { font-family: var(--font-serif); font-weight: 700; font-size: 15px; color: #f4f1e8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.viewer-frame { width: 100%; height: calc(100vh - 53px); border: 0; background: #fff; display: block; }
+.viewer-frame { width: 100%; height: calc(100vh - 70px); border: 0; background: #fff; display: block; }
+.viewer-hint { padding: var(--sp-2) var(--sp-5); background: var(--paper-2); color: var(--text-secondary); font-size: 11.5px; border-top: 1px solid var(--line); }
+.flow-note { margin-bottom: var(--sp-5); padding: var(--sp-4) var(--sp-5); background: var(--paper); border-left: 3px solid var(--amber); color: var(--text-body); font-size: 12.5px; line-height: 1.7; }
 .src-pre { margin: 0; padding: var(--sp-5); background: var(--navy); color: #d6e0ea; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; overflow: auto; max-height: calc(100vh - 53px); }
 
 /* ---------- 历史 ---------- */
@@ -131,6 +133,7 @@ button { background: none; border: 0; cursor: pointer; }
 .hist-item .kind.delete { color: var(--accent); border-color: var(--accent); }
 .hist-item .kind.restore { color: var(--text-secondary); }
 .hist-item .sum { color: var(--text-body); }
+.hist-item [data-restore] { margin-left: auto; align-self: center; flex: none; }
 
 /* ---------- toast ---------- */
 .toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(20px); background: var(--navy); color: #f4f1e8; padding: var(--sp-3) var(--sp-5); font-size: 13px; opacity: 0; pointer-events: none; transition: all .25s; max-width: 70vw; }

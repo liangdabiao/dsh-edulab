@@ -1,7 +1,8 @@
 // 课件实验室 · lib 层单测。
 // 运行：npm test（node --test test/）
 // 注意：DSH_HOME 必须在 import lib/data.js 之前设置（DATA_DIR 在模块加载时求值）。
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,6 +27,18 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SKILLS_DIR = join(ROOT, 'skills')
 
 // ---- 测试素材 ----------------------------------------------------------------
+
+// 向系统要一个空闲端口（固定端口在本机可能被别的实例占着）
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer()
+    probe.once('error', reject)
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address()
+      probe.close(() => resolve(port))
+    })
+  })
+}
 
 // 完好课件样本：有数据岛 + 收尾完整 + 只有 CDN 外链
 function goodHtml(island = true) {
@@ -299,7 +312,7 @@ test('tools: 未知参数拒绝', async () => {
 // ---- serve（预览服务）----------------------------------------------------------
 
 test('serve: start/status/stop + 路径穿越拒绝', async () => {
-  const PORT = 5296
+  const PORT = await freePort() // 不写死端口：本机可能已有实例（或上一次测试残留）占着固定端口
   const started = await startServer(PORT)
   assert.equal(started.ok, true)
   const st = serverStatus()
@@ -327,6 +340,28 @@ test('serve: start/status/stop + 路径穿越拒绝', async () => {
   const stopped = await stopServer()
   assert.equal(stopped.ok, true)
   assert.equal(serverStatus().up, false)
+})
+
+test('serve: 端口被占时 listen 失败不留僵尸（status 必须 up:false，换端口要真能起）', async () => {
+  await stopServer()
+  const busy = await freePort()
+  const blocker = net.createServer()
+  await new Promise((r) => blocker.listen(busy, '127.0.0.1', r))
+  try {
+    // 报错要给出可执行的下一步（改 previewPort），不是裸的 EADDRINUSE
+    await assert.rejects(() => startServer(busy), /端口/)
+    const st = serverStatus()
+    assert.equal(st.up, false, 'listen 失败后 serverStatus 不能报 up（否则面板会渲染永远白屏的 iframe）')
+    assert.equal(st.base, null)
+    // 残留的死对象不能命中 alreadyRunning：换空闲端口必须真的监听起来
+    const ok = await startServer(await freePort())
+    assert.equal(ok.ok, true)
+    assert.equal(ok.alreadyRunning, false)
+    assert.equal(serverStatus().up, true)
+  } finally {
+    await stopServer()
+    await new Promise((r) => blocker.close(r))
+  }
 })
 
 // ---- api（面板路由）------------------------------------------------------------
@@ -395,6 +430,41 @@ test('api: registerApi 路由 ping/catalog/archive/history/remove', async () => 
   const preview404 = mockRes()
   await route.handler(mockReq({ url: `/edulab/api/preview?id=${a.id}` }), preview404)
   assert.equal(preview404.statusCode, 404)
+})
+
+// ---- 面板静态资源（lab/）------------------------------------------------------
+
+test('lab: index.html 引用的本地资源都在 lab/ 里（缺 icon.svg 的 404 回归）', () => {
+  const html = readFileSync(join(ROOT, 'lab', 'index.html'), 'utf8')
+  const refs = [...html.matchAll(/(?:src|href)="([^"]+)"/g)]
+    .map((m) => m[1])
+    .filter((ref) => !/^(?:#|https?:|\/\/|mailto:|data:|javascript:)/.test(ref))
+  assert.ok(refs.length >= 3, `index.html 应该引用本地资源，实际：${refs.join(', ')}`)
+  const missing = refs.filter((ref) => !existsSync(join(ROOT, 'lab', ref.replace(/[?#].*$/, ''))))
+  assert.deepEqual(missing, [], `lab/ 里缺被 index.html 引用的资源：${missing.join(', ')}`)
+})
+
+test('lab: 路由能取到面板页面与每个静态资源（含 icon.svg）', async () => {
+  const { registerApi } = await import('../lib/api.js')
+  const registered = []
+  registerApi(
+    { get: () => undefined, webServer: { register: (def) => { registered.push(def); return def } } },
+    { configRef: { config: { previewPort: 5298, _version: 'test' } } },
+  )
+  const route = registered[0]
+  for (const rel of ['/', '/app.js', '/style.css', '/scheme.js', '/icon.svg']) {
+    const res = mockRes()
+    await route.handler(mockReq({ url: `/edulab${rel}` }), res)
+    assert.equal(res.statusCode, 200, `${rel} 应可访问（实际 ${res.statusCode}）`)
+    // 文件走 createReadStream 异步 pipe，测试里不等流结束；用 content-length 证明文件真的非空
+    assert.ok(Number(res.headers['content-length']) > 0, `${rel} 不该是空文件`)
+  }
+  // 点开头的路径与穿越仍然拒绝
+  for (const bad of ['/edulab/../package.json', '/edulab/.gitignore', '/edulab/没有.js']) {
+    const res = mockRes()
+    await route.handler(mockReq({ url: bad }), res)
+    assert.equal(res.statusCode, 404, `${bad} 应 404`)
+  }
 })
 
 // ---- 清场 ----------------------------------------------------------------------

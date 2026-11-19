@@ -11,8 +11,8 @@ async function api(path, opts) {
   try {
     res = await fetch(`/edulab${path}`, opts)
   } catch {
-    // 网络层失败（服务不在/连接拒绝）：fetch 抛 TypeError，给一句人话
-    throw new Error('面板服务没在跑——数据接口连不上，重启 dsh 或插件预览服务后重试')
+    // 网络层失败（fetch 抛 TypeError）：/edulab/api/* 走插件 host 的 webServer，与 5200 预览服务无关
+    throw new Error('插件接口没响应——重启 dsh 后重试（这不是预览服务的问题）')
   }
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
@@ -68,6 +68,7 @@ async function viewHome() {
       <div class="page-title">课件实验室</div>
       <div class="page-sub">学科题目 → 单文件交互课件（Three.js / Canvas / KaTeX）</div>
     </div>
+    <div class="flow-note">流程：<b>发起制作</b>（带指令开新对话）→ agent 按技能生成 HTML 并跑 <b>edulab validate</b>（机械安检：拦占位符残留 / 坏 JSON 数据岛 / 文件截断）→ <b>save 存证</b> → 回到「课件档案」点<b>预览</b>看真实渲染。</div>
     <div class="stat-row">
       <div class="stat"><div class="k">课件档案</div><div class="v">${s.archives || 0}<small> 份</small></div></div>
       <div class="stat amber"><div class="k">安检通过</div><div class="v">${s.validateOk || 0}<small> / ${s.archives || 0}</small></div></div>
@@ -99,13 +100,16 @@ async function viewHome() {
   if (serveBtn) serveBtn.onclick = () => startServe()
 }
 
-function histList(events) {
-  if (!events.length) return `<div class="empty">还没有动态。发起制作 → 生成课件 → save 存证后，这里会留记录。</div>`
+function histList(events, { actions = false } = {}) {
+  if (!events.length) {
+    return `<div class="empty">还没有动态。发起制作 → 生成课件 → save 存证后，这里会留记录。${actions ? '<br><br><a class="btn small primary" href="#/start">✦ 发起制作</a>' : ''}</div>`
+  }
   return `<div>${events.map((e) => `
     <div class="hist-item">
       <span class="at">${esc(fmtTime(e.at))}</span>
       <span class="kind ${esc(e.kind)}">${esc(catalog?.kinds?.[e.kind] || e.kind)}</span>
       <span class="sum">${esc(e.title)}｜${esc(e.summary || '')}</span>
+      ${actions && e.kind === 'delete' && e.snapshot ? `<button class="btn small ghost" data-restore="${esc(e.id)}">恢复</button>` : ''}
     </div>`).join('')}</div>`
 }
 
@@ -162,11 +166,32 @@ async function viewStart(params) {
     startDraft.topic = $('#f-topic').value
     const prompt = buildPrompt()
     if (!prompt) return toast('先选学科')
+    const btn = $('#btn-launch')
+    launchLabel = btn.textContent
+    btn.disabled = true
+    btn.textContent = '正在打开新对话…'
+    clearTimeout(launchTimer)
+    // 宿主没回 ack 就说明桥断了（main slot 没挂、startSession 抛错等），不能让按钮永远转着
+    launchTimer = setTimeout(() => {
+      resetLaunch()
+      toast('宿主没响应：没收到「已开新对话」的回执。请重试，或刷新页面后重开面板', 4200)
+    }, 2200)
     parent.postMessage({ type: 'edulab:start', prompt }, location.origin)
   }
   // 幂等注册：viewStart 每次进入都会执行，重复 add 会叠加监听器
   removeEventListener('message', onLaunchAck)
   addEventListener('message', onLaunchAck)
+}
+
+let launchTimer = 0
+let launchLabel = ''
+function resetLaunch() {
+  clearTimeout(launchTimer)
+  // 视图可能已经切走，按钮不在就跳过
+  const btn = $('#btn-launch')
+  if (!btn) return
+  btn.disabled = false
+  if (launchLabel) btn.textContent = launchLabel
 }
 
 function buildPrompt() {
@@ -183,8 +208,8 @@ function buildPrompt() {
 
 function onLaunchAck(e) {
   if (e.origin !== location.origin) return
-  if (e.data?.type === 'edulab:start-ok') toast('已开新对话，指令已填入，回车发送即可')
-  else if (e.data?.type === 'edulab:start-failed') toast(`发起失败：${e.data.message || '未知错误'}`)
+  if (e.data?.type === 'edulab:start-ok') { resetLaunch(); toast('已开新对话，指令已填入，回车发送即可') }
+  else if (e.data?.type === 'edulab:start-failed') { resetLaunch(); toast(`发起失败：${e.data.message || '未知错误'}`) }
 }
 
 // ---------- 档案 ----------
@@ -197,8 +222,9 @@ async function viewArchives() {
   app.innerHTML = `
     <div class="page-head">
       <div class="page-title">课件档案</div>
-      <div class="page-sub">${archives.length} 份 · 存证于 ~/.dsh/dsh-edulab/courseware/</div>
+      <div class="page-sub">${archives.length} 份 · 存证在插件数据目录的 courseware/</div>
       <div class="spacer"></div>
+      <button class="btn ghost small" id="btn-refresh">刷新</button>
       ${c.server?.up ? `<a class="btn ghost small" href="${esc(c.server.base)}/" target="_blank" rel="noopener">存证索引页 ↗</a>` : `<button class="btn ghost small" id="btn-serve2">启动预览服务</button>`}
     </div>
     ${archives.length ? `<div class="grid">${archives.map((a) => `
@@ -215,13 +241,14 @@ async function viewArchives() {
           </div>
         </div>
         <div class="actions">
-          <button class="btn small primary" data-preview="${esc(a.id)}" ${c.server?.up ? '' : 'disabled'}>预览</button>
+          <button class="btn small primary" data-preview="${esc(a.id)}" ${c.server?.up ? '' : `disabled title="预览服务没在跑：先点右上角「启动预览服务」"`}>预览</button>
           <button class="btn small ghost" data-src="${esc(a.id)}">源码</button>
           <button class="btn small ghost" data-del="${esc(a.id)}">删除</button>
         </div>
       </div>`).join('')}</div>`
-      : `<div class="empty">还没有课件档案。发起制作 → 生成 → save 存证后，这里就能回看。</div>`}`
+      : `<div class="empty">还没有课件档案。发起制作 → 生成 → save 存证后，这里就能回看。<br><br><a class="btn small primary" href="#/start">✦ 发起制作</a></div>`}`
   $('#btn-serve2')?.addEventListener('click', startServe)
+  $('#btn-refresh')?.addEventListener('click', () => { catalog = null; render(viewNow()) })
   app.querySelectorAll('[data-preview]').forEach((b) => { b.onclick = () => { location.hash = `#/preview?id=${b.dataset.preview}` } })
   app.querySelectorAll('[data-src]').forEach((b) => { b.onclick = () => viewSource(b.dataset.src) })
   app.querySelectorAll('[data-del]').forEach((b) => { b.onclick = async () => {
@@ -247,17 +274,20 @@ async function viewPreview(params) {
       <span class="title">${esc(archive.title)}</span>
       <span class="mono" style="color:#8fa0b5">${esc(archive.skillTitle || '')} · ${fmtSize(archive.size)}</span>
       <div class="spacer"></div>
+      ${data.up ? `<a class="btn small ghost" style="border-color:rgba(255,255,255,.3);color:#dfe6ee" href="${esc(data.url)}" target="_blank" rel="noopener">新窗口打开 ↗</a>` : ''}
       ${data.up ? '' : `<button class="btn small primary" id="btn-serve3">启动预览服务</button>`}
     </div>
     ${data.up && data.url
-      ? `<iframe class="viewer-frame" src="${esc(data.url)}" title="课件预览"></iframe>`
+      ? `<iframe class="viewer-frame" src="${esc(data.url)}" title="课件预览"></iframe>
+         <div class="viewer-hint">白屏的话：课件里的 Three.js / KaTeX 走 CDN，断网就加载不出来；也可以点「新窗口打开 ↗」看浏览器报什么错。</div>`
       : `<div class="empty" style="margin:var(--sp-8)">预览服务没在跑。启动后即可在这里直接看到真实课件。<br><br><button class="btn primary" id="btn-serve4">启动预览服务</button></div>`}`
   const start = async () => {
     try {
       await api('/api/serve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-      await new Promise((r) => setTimeout(r, 300))
+      toast('预览服务已启动')
+      await loadCatalog(true)
       render(viewNow())
-    } catch (err) { toast(`预览服务没起来：${err.message}`) }
+    } catch (err) { toast(`预览服务没起来：${err.message}`, 4200) }
   }
   $('#btn-serve3')?.addEventListener('click', start)
   $('#btn-serve4')?.addEventListener('click', start)
@@ -283,13 +313,29 @@ async function viewHistory() {
   app.innerHTML = `
     <div class="page-head">
       <div class="page-title">动态历史</div>
-      <div class="page-sub">save / 删除 / 恢复全程留痕</div>
+      <div class="page-sub">save / 删除 / 恢复全程留痕；删除的记录可从快照恢复</div>
       <div class="spacer"></div>
       <button class="btn ghost small" id="btn-clear">清空历史</button>
     </div>
-    ${histList(c.history || [])}`
+    ${histList(c.history || [], { actions: true })}`
+  app.querySelectorAll('[data-restore]').forEach((b) => {
+    b.onclick = async () => {
+      if (!confirm('把这份课件从删除快照恢复到档案库？')) return
+      try {
+        const r = await api('/api/archive/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ eventId: b.dataset.restore }) })
+        toast(r.summary || '已恢复')
+        await loadCatalog(true)
+        render(viewNow())
+      } catch (err) { toast(`恢复失败：${err.message}`) }
+    }
+  })
   $('#btn-clear').onclick = async () => {
-    if (!confirm('清空全部历史记录？（课件档案不受影响）')) return
+    // 恢复全靠 delete 事件里的快照：清空历史 = 把已删除课件的唯一退路一起销毁，必须说清楚
+    const snaps = (c.history || []).filter((e) => e.kind === 'delete' && e.snapshot).length
+    const warn = snaps
+      ? `清空全部历史记录？\n\n注意：其中 ${snaps} 条「删除」记录带着恢复快照，清空后这 ${snaps} 份已删除的课件将永久无法找回。\n（当前课件档案本身不受影响）`
+      : '清空全部历史记录？（课件档案不受影响）'
+    if (!confirm(warn)) return
     try {
       await api('/api/history/clear', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
       await loadCatalog(true)
@@ -318,7 +364,34 @@ function viewNow() {
   if (view === '/history') return viewHistory()
   return viewHome()
 }
-function render(promise) { Promise.resolve(promise).catch((err) => viewError(err.message)) }
+// 慢查询才显示 LOADING：首次/缓存过期要串行探测 python3，界面不能一动不动；
+// 但快路径（catalog 已缓存）不能在渲染完之后被这行盖掉，所以落定就 clearTimeout。
+let renderToken = 0
+function render(promise) {
+  const token = ++renderToken
+  const timer = setTimeout(() => {
+    if (token === renderToken) app.innerHTML = '<div class="loading">LOADING…</div>'
+  }, 200)
+  return Promise.resolve(promise).then(
+    () => clearTimeout(timer),
+    (err) => { clearTimeout(timer); viewError(err.message) },
+  )
+}
+
+// 回到面板自动刷新：agent 在对话里 save 完，用户切回来就能看到新档案，
+// 不用靠「切走再切回来」这种不可发现的操作自救。
+let lastAutoRefresh = 0
+function refreshOnReturn() {
+  if (document.visibilityState !== 'visible') return
+  if (Date.now() - lastAutoRefresh < 1500) return
+  // 预览视图里整块重渲染会重载 iframe（三维课件的视角/交互全丢），别自动作废用户的现场
+  if ((location.hash || '').startsWith('#/preview')) return
+  lastAutoRefresh = Date.now()
+  catalog = null
+  render(viewNow())
+}
 
 addEventListener('hashchange', () => render(viewNow()))
+addEventListener('visibilitychange', refreshOnReturn)
+addEventListener('focus', refreshOnReturn)
 render(viewNow())

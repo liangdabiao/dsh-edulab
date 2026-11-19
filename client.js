@@ -47,12 +47,22 @@ function apply(ctx) {
         if (!frame || e.source !== frame.contentWindow || e.origin !== location.origin) return
         const m = e.data
         if (!m || m.type !== 'edulab:start' || typeof m.prompt !== 'string') return
+        // 回执要等 startSession 真的落地：同步抛错、异步 reject 都算失败，
+        // 否则面板先弹「已开新对话」再什么都没发生（假成功）。
+        const ack = (ok, err) => {
+          try {
+            frame.contentWindow.postMessage(
+              ok ? { type: 'edulab:start-ok' } : { type: 'edulab:start-failed', message: String((err && err.message) || err) },
+              location.origin,
+            )
+          } catch { /* 面板已卸载 */ }
+        }
         try {
-          ctx.uiWorkspace.startSession(undefined, { prompt: m.prompt, whenDraftExists: 'replace' })
-          try { frame.contentWindow.postMessage({ type: 'edulab:start-ok' }, location.origin) } catch {}
+          const started = ctx.uiWorkspace.startSession(undefined, { prompt: m.prompt, whenDraftExists: 'replace' })
+          Promise.resolve(started).then(() => ack(true), (err) => { console.error('[edulab] 开新对话失败', err); ack(false, err) })
         } catch (err) {
           console.error('[edulab] 开新对话失败', err)
-          try { frame.contentWindow.postMessage({ type: 'edulab:start-failed', message: String((err && err.message) || err) }, location.origin) } catch {}
+          ack(false, err)
         }
       }
       addEventListener('message', onMessage)

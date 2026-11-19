@@ -3,6 +3,7 @@
 //   → validate → save → serve → 面板路由（真 http server 挂 lab/ + api）→ fetch 验证。
 // 运行：DSH_HOME=隔离目录 node scripts/smoke.mjs
 import http from 'node:http'
+import net from 'node:net'
 import { copyFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -10,7 +11,22 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 if (!process.env.DSH_HOME) process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh-edulab-smoke-'))
-const PORT = 5292
+
+// 端口不写死：本机可能已经有别的实例（面板 demo / 上一次冒烟）占着 5292/5293，
+// 固定端口会让冒烟在 EADDRINUSE 上假失败。这里向系统要两个空闲端口。
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer()
+    probe.once('error', reject)
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address()
+      probe.close(() => resolve(port))
+    })
+  })
+}
+
+const PORT = await freePort() // 预览服务
+const PANEL_PORT = await freePort() // 面板路由
 const results = []
 const check = (name, cond, detail = '') => {
   results.push({ name, ok: Boolean(cond), detail })
@@ -56,8 +72,8 @@ check('serve 启动预览服务', served.ok, served.summary)
 
 // ---- 6. 面板路由（真 http server 挂 prefix handler）----
 const server = http.createServer((req, res) => ctx._route.handler(req, res))
-await new Promise((r) => server.listen(PORT + 1, '127.0.0.1', r))
-const base = `http://127.0.0.1:${PORT + 1}`
+await new Promise((r) => server.listen(PANEL_PORT, '127.0.0.1', r))
+const base = `http://127.0.0.1:${PANEL_PORT}`
 
 const page = await fetch(`${base}/edulab/`)
 const pageHtml = await page.text()
