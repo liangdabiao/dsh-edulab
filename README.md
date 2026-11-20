@@ -3,6 +3,7 @@
 把学科题目 / 知识点生成为**可直接在浏览器打开的单文件交互课件 HTML**——Three.js 3D 场景 / Canvas 2D 动画、步进式讲解、侧栏知识点面板、可交互参数控制，全部装进一个 HTML 文件。
 
 8 个学科技能收编自 [edulab](https://github.com/liangdabiao/edulab)（Apache-2.0），转为 dsh 全形态插件：`edulab` 工具管环境自检 / 成品安检 / 存证 / 预览，侧栏「课件实验室」看板管发起与回看。
+<img width="1832" height="1401" alt="image" src="https://github.com/user-attachments/assets/9d4689ed-4661-4701-8703-c319e80fc59b" />
 
 ## 安装
 
