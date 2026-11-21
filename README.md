@@ -4,6 +4,7 @@
 
 8 个学科技能收编自 [edulab](https://github.com/liangdabiao/edulab)（Apache-2.0），转为 dsh 全形态插件：`edulab` 工具管环境自检 / 成品安检 / 存证 / 预览，侧栏「课件实验室」看板管发起与回看。
 <img width="1832" height="1401" alt="image" src="https://github.com/user-attachments/assets/9d4689ed-4661-4701-8703-c319e80fc59b" />
+<img width="1413" height="1014" alt="image" src="https://github.com/user-attachments/assets/70efe271-a233-45bf-967d-3407889cacf5" />
 
 ## 安装
 
