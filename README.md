@@ -82,3 +82,5 @@ skills/          8 个学科技能原样快照（SKILL.md + template + reference
 ## License
 
 Apache-2.0（沿用 edulab 原始许可，出处见 LICENSE）
+
+感谢社区支持：https://linux.do
